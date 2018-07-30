@@ -2,11 +2,12 @@
 # querySafariDownloadsPlist.py
 # look through safari browser download history to attempt to identify malware
 # csv output in the current working directory
-# output fields: path where files was downloaded to,
-#				 URL of the download,
-#				 size of the download (not always accurate due to plist updating),
-# 				 date of the download,
-# 				 Hash of the download (if it is still in the location it was downloaded to)	
+# output fields: 
+# 	Path where files was downloaded to,
+#	URL of the download,
+#	Size of the download (not always accurate due to plist updating),
+# 	Date of the download,
+# 	Hash of the download (if it is still in the location it was downloaded to)	
 #			 
 # Last Edited: 7/30/18
 
