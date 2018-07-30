@@ -1,7 +1,14 @@
 #!/usr/bin/python
 # querySafariDownloadsPlist.py
 # look through safari browser download history to attempt to identify malware
-# Last Edited: 7/27/18
+# csv output in the current working directory
+# output fields: path where files was downloaded to,
+#				 URL of the download,
+#				 size of the download (not always accurate due to plist updating),
+# 				 date of the download,
+# 				 Hash of the download (if it is still in the location it was downloaded to)	
+#			 
+# Last Edited: 7/30/18
 
 ### IMPORTS
 import os
@@ -13,7 +20,8 @@ import plistlib
 import subprocess
 
 ### VARIABLES
-userList = glob.glob('/Users/*')
+volPath = ''
+userList = ''
 resultsFile = 'Safari-Downloads-Plist-Contents.csv'
 
 ### FUNCTIONS
@@ -39,6 +47,22 @@ def hash_file(filename):
 			sha256Hash.update(data)
 	hashResult = "{0}".format(sha256Hash.hexdigest())
 	return(hashResult)
+	
+''' prompt for volume to query '''
+def ask_volume():
+	global userList
+	global volPath
+	subprocess.call(['diskutil', 'list'])
+	prompt = raw_input('Query which volume? (ex. Macintosh HD)\n -> ')
+	target = os.path.join('/Volumes', prompt)
+	# check if passed in volume exists
+	if os.path.exists(str(target)):
+		volPath = target
+		print('Querying ' + volPath)
+		userList = glob.glob(volPath + '/Users/*')
+	else:
+		print('Invalid input.')
+		exit()
 
 
 ''' Query the Downloads.plist for each user recorded by Safari '''
@@ -94,7 +118,7 @@ def query_safari(list):
 					# append the results to the result list
 					results.append(resultString)
 				else:
-					resultString = str(dl_path + ',' + dl_url + ',' + str(dl_size) + ',' + str(dl_date))
+					resultString = str(dl_path + ',' + dl_url + ',' + str(dl_size) + ',' + str(dl_date) + ',')
 					results.append(resultString)
 			if os.path.exists('/tmp/dl.plist'):
 				os.remove('/tmp/dl.plist')
@@ -104,4 +128,5 @@ def query_safari(list):
 	
 			
 ### SCRIPT
+ask_volume()
 query_safari(userList)
