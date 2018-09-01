@@ -9,15 +9,13 @@
 # 	Date of the download,
 # 	Hash of the download (if it is still in the location it was downloaded to)	
 #			 
-# Last Edited: 7/30/18
+# Last Edited: 8/31/18
 
 ### IMPORTS
 import os
 import glob
 import time
-import shutil
 import hashlib
-import plistlib
 import subprocess
 
 ### VARIABLES
@@ -50,7 +48,7 @@ def hash_file(filename):
 	return(hashResult)
 	
 ''' prompt for volume to query '''
-def ask_volume():
+def askVolume():
 	global userList
 	global volPath
 	subprocess.call(['diskutil', 'list'])
@@ -66,8 +64,29 @@ def ask_volume():
 		exit()
 
 
+def readPlist(plist):
+	try:
+		# first try to import the Foundation library to use Obj-C calls to read the plist
+		import Foundation
+		return(Foundation.NSDictionary.dictionaryWithContentsOfFile_(plist))
+	except ImportError, e:
+		import plistlib
+		# try using plistlib
+		return(plistlib.readPlist(plist))
+	else:
+		import shutil
+		import plistlib
+		# copy to a tmp file
+		shutil.copy(plist, "/tmp/plist")
+		# convert it using the plutil binary to xml1
+		subprocess.call(["plutil", "-convert", "xml1", "/tmp/plist"])
+		plist_contents = plistlib.readPlist("/tmp/plist")
+		# clean up the tmp file
+		os.remove("/tmp/plist")
+		return(plist_contents)
+		
 ''' Query the Downloads.plist for each user recorded by Safari '''
-def query_safari(list):
+def querySafari(list):
 	# initialize results list to store info strings
 	results = []
 	# check for each user
@@ -75,59 +94,54 @@ def query_safari(list):
 		fp = os.path.join(list[i], 'Library/Safari/Downloads.plist')
 		userHome = list[i]
 		if os.path.exists(fp):		
-			# copy the plist to /tmp so we can convert it using plutil ->
-			#<https://stackoverflow.com/questions/22211674/plistlib-cant-read-safaris-plist-file>
-			shutil.copy(fp, '/tmp/dl.plist')
-			
-			# shell out to plutil
-			subprocess.call(['plutil', '-convert', 'xml1', '/tmp/dl.plist'])
-			time.sleep(2)
+			# load the plist
+			pl = readPlist(fp)
 			
 			# parse the plist
-			pl = plistlib.readPlist('/tmp/dl.plist')
 			all_dl_hist = pl['DownloadHistory']
-			# each download generates a new dictionary with the top-most entry being the most recent
-			for i in range(len(all_dl_hist)):
-				dl_hist = pl['DownloadHistory'][i]
-				''' 
-				Query these keys
-				DownloadEntryDateAddedKey (not using DownloadEntryDateFinishedKey because it may not have finished)
-				DownloadEntryPath
-				DownloadEntryProgressTotalToLoad
-				DownloadEntryURL
-				'''
-				dl_date = dl_hist['DownloadEntryDateAddedKey']
-				dl_path = dl_hist['DownloadEntryPath']
-				dl_size = dl_hist['DownloadEntryProgressTotalToLoad']
-				dl_url = dl_hist['DownloadEntryURL']
+			if not all_dl_hist:
+				print("No downloaded items in the Safari history plist")
+			else:
+				# each download generates a new dictionary with the top-most entry being the most recent
+				for i in range(len(all_dl_hist)):
+					dl_hist = pl['DownloadHistory'][i]
+					''' 
+					Query these keys
+					DownloadEntryDateAddedKey (not using DownloadEntryDateFinishedKey because it may not have finished)
+					DownloadEntryPath
+					DownloadEntryProgressTotalToLoad
+					DownloadEntryURL
+					'''
+					dl_date = dl_hist['DownloadEntryDateAddedKey']
+					dl_path = dl_hist['DownloadEntryPath']
+					dl_size = dl_hist['DownloadEntryProgressTotalToLoad']
+					dl_url = dl_hist['DownloadEntryURL']
 			
-				# generate an actual path for the entry path
-				check_path = ''
-				s = dl_path.split("/")
-				if s[0] == '~':
-					s = s[1:]
-					j = "/".join(s)
-					check_path = os.path.join(userHome, j)
-				else:
-					check_path = dl_path
+					# generate an actual path for the entry path
+					check_path = ''
+					s = dl_path.split("/")
+					if s[0] == '~':
+						s = s[1:]
+						j = "/".join(s)
+						check_path = os.path.join(userHome, j)
+					else:
+						check_path = dl_path
 				
-				# check if download is still at DownloadEntryPath
-				if os.path.exists(check_path):
-					# if it is, take the sha256 hash
-					dl_hash = hash_file(check_path)
-					resultString = str(dl_path + ',' + dl_url + ',' + str(dl_size) + ',' + str(dl_date) + ',' + dl_hash)
-					# append the results to the result list
-					results.append(resultString)
-				else:
-					resultString = str(dl_path + ',' + dl_url + ',' + str(dl_size) + ',' + str(dl_date) + ',')
-					results.append(resultString)
-			if os.path.exists('/tmp/dl.plist'):
-				os.remove('/tmp/dl.plist')
+					# check if download is still at DownloadEntryPath
+					if os.path.exists(check_path):
+						# if it is, take the sha256 hash
+						dl_hash = hash_file(check_path)
+						resultString = str(dl_path + ',' + dl_url + ',' + str(dl_size) + ',' + str(dl_date) + ',' + dl_hash)
+						# append the results to the result list
+						results.append(resultString)
+					else:
+						resultString = str(dl_path + ',' + dl_url + ',' + str(dl_size) + ',' + str(dl_date) + ',')
+						results.append(resultString)
 		
 		# write the results to an output file
 		write_list(resultsFile, results)
 	
 			
 ### SCRIPT
-ask_volume()
-query_safari(userList)
+askVolume()
+querySafari(userList)
